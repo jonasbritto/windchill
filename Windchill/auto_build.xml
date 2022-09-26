@@ -1,0 +1,1149 @@
+<project name="Project" default="firstslavebuild_incremental">
+	<description>
+         Project Build File
+    </description>
+
+	<!-- 
+   For Unix :
+	ant -f auto_build.xml firstslavebuild_full
+	-Dadminuserid=wcadmin
+	-Dadminpassword=xxxxxx
+	-Dwindchillinstalldir=/opt/ptc/Windchill_11/Windchill
+	-Dunjarwindchilldir=/opt/ptc/builds/gitlab/unzipofcurrentbuild/Windchill
+	-Denvtype=DEVUNIX -Djavainstalldir=/opt/ptc/Windchill_11/Java 
+	-Dfilename=xxxxzipofthefullcodeincludingwindchillfolder.zip
+
+	
+	
+   For Windows :
+	ant -f auto_build.xml firstslavebuild_full
+	-Dadminuserid=wcadmin
+	-Dadminpassword=xxxxxx
+	-Dwindchillinstalldir=C:/ptc/Windchill_11.1/Windchill  
+	-Dunjarwindchilldir=C:/ptc/builds/gitlab/unzipofcurrentbuild/Windchill
+	-Denvtype=DEVWINDOWS 
+	-Djavainstalldir=C:/ptc/Windchill_11/Java 
+	-Dfilename=xxxxzipofthefullcodeincludingwindchillfolder.zip
+
+	Dunjarwindchilldir IS A temp path for the SCRIPT TO UNZIP THE ZIP provided
+	the ZIP Must reside inside {windchillinstalldir}/../../builds/gitlab/incrementalbuildjars/${filename}
+	so, for example  C:/ptc/builds/gitlab/incrementalbuildjars/xxxxzipofthefullcodeincludingwindchillfolder.zip
+	
+	note - if you unzip, you should get Windchill folder at the top and not Windchill/Windchill, so please zip like that
+	
+	
+	-->
+	<!--Properties Provided By jenkins-->
+	<property name="adminuserid" value="${adminuserid}" />
+	<property name="adminpassword" value="${adminpassword}" />
+	<property name="windchillinstalldir" location="${windchillinstalldir}" />
+	<property name="unjarwindchilldir" value="${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild/Windchill" />
+	<property name="envtype" value="${envtype}" />
+	<property name="dbuser" value="${dbuser}" />
+	<property name="dbpassword" value="${dbpassword}" />
+	<property name="javainstalldir" location="${javainstalldir}" />
+	<property name="vaultpath" location="${vaultpath}" />
+	<property name="fishbowlbuildpath" location="${fishbowlbuildpath}" />
+	
+	<!--users and passwords for cad worker -->
+	<property name="userforcadworkerfromjenkins" value="${userforcadworkerfromjenkins}" />
+	<property name="pwdforcadworkerfromjenkins" value="${pwdforcadworkerfromjenkins}" />
+	
+	<!--Server urls for the properties file SFTPauth.properties,numbergeneratorIDs.properties-->
+	<property name="hostnamefornumbergeneratorfromjenkins" value="${hostnamefornumbergeneratorfromjenkins}" />
+	<property name="providerurl" value="${providerurl}" />
+	<property name="userldap" value="${userldap}" />
+	<property name="passwordldap" value="${passwordldap}" />
+
+	<!-- Newly added for unjar target to run -->
+	<property name="filename" value="${filename}" />
+	<property name="middlewarewebserviceurl" value="${middlewarewebserviceurl}" />
+	
+	<!---for rsync-->
+	<property name="remoteserverHostname2" value="${remoteserverHostname2}" />
+	<property name="remoteserverHostname1" value="${remoteserverHostname1}" />
+	<property name="usernameforremoteapache" value="${usernameforremoteapache}" />
+	
+	<!--Windchill path-->
+	<property name="unjarsrcdir" value="${unjarwindchilldir}/src/ext" />
+	<property name="unjarsrcdirwtsafearea" value="${unjarwindchilldir}/wtSafeArea/siteMod/src/" />
+	<property name="unjarsrcdirinterface" value="${unjarwindchilldir}/InterfaceWebServiceSource" />
+	<property name="unjarsrcdiroracleintegration" value="${unjarwindchilldir}/src/com" />
+
+	<!-- For FishBowl, we take this also from the GIT unzipped folder derived from unjarred windchill folder-->
+	<property name="unjarfishbowldir" value="${unjarwindchilldir}/../fishbowlonwindchillserver"/>
+	<property name="fishbowlinstalldir" value="${windchillinstalldir}/../../Fishbowl"/>
+	<property name="destdir" value="${windchillinstalldir}/codebase" />
+	<property name="taskdir" value="${windchillinstalldir}/tasks.custo/"/>
+	
+	<!-- set global vairables for this build -->
+	<property environment="env" />
+	<property name="env.WT_HOME" value="${windchillinstalldir}"/> 
+	<property name="env.JAVA_HOME" value="${javainstalldir}"/> 
+	<property name="env.JENKINS_NODE_COOKIE" value="dontKillMe"/> 
+	<property name="env.PATH" value="${PATH}"/>  
+	
+	<!-- Set the ANT_OPTS variable Value -->
+	<property name="env.ANT_OPTS" value="-Xms2048m -Xmx4056m"  />
+	<property name="JENKINS_URL" value="${env.JENKINS_URL}" />
+	<property name="JOB_NAME" value="${env.JOB_NAME}" />
+	
+	
+	<!--OS Family Condition-->
+	<condition property="osfamily" value="WINDOWS">
+		<os family="windows" />
+	</condition>
+	<condition property="osfamily" value="UNIX">
+		<os family="unix" />
+	</condition>
+	
+    <!-- adding abelow ant-contrib-1.0b3.jar for the use of if then tags in this script, to improve readiblity -->
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties">
+		<classpath>
+			<!-- Incrementals builds the jar will be found in below path -->
+				<pathelement location="${windchillinstalldir}/lib/ant-contrib.jar" />
+		</classpath>
+	</taskdef>
+	
+	
+	<!--Echo Messages forJenkins Job Information-->
+	<echo message="---------------------------------" />
+	<echo message="Below is the Jenkins Job Information"/>
+	<echo message="JENKINS_URL = ${env.JENKINS_URL}" />
+	<echo message="JOB_NAME = ${env.JOB_NAME}" />
+	<echo message="filename	=	${filename}" />
+	<echo message="---------------------------------" />
+	
+	<!--Echo Messages for property Printing On Console-->	
+	<echo message="---------------------------------" />
+	<echo message="Below is the Enviornmental Properties" />
+	<echo message="---------------------------------" />
+	<echo message="WT_HOME = ${env.WT_HOME}" />
+   	<echo message="Java Home = ${env.JAVA_HOME}" />
+	<echo message="PATH = ${env.PATH}" /> 
+	<echo message="Setting ANT_OPTS value before Starting the Build Execution. Need MINIMIUM 2GB free on the Windchill machine" />
+	<echo message="ANT_OPTS = ${env.ANT_OPTS}" />
+	<echo message="JENKINS_NODE_COOKIE = ${env.JENKINS_NODE_COOKIE}" />
+	<echo message="---------------------------------" />
+	
+	<echo message="---------------------------------" />
+	<echo message="Below is the Windchill install paths provided by user" />
+	<echo message="---------------------------------" />
+	<echo message="adminuserid	=	${adminuserid}" />
+	<echo message="adminpassword	=	****** " />
+	<echo message="windchillinstalldir	=	${windchillinstalldir}" />
+	<echo message="unjarwindchilldir	=	${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild/Windchill" />
+	<echo message="envtype	=	${envtype}" />
+	<echo message="dbuser	=	******" />
+	<echo message="dbpassword	=	******" />
+	<echo message="javainstalldir	=	${javainstalldir}" />
+	<echo message="vaultpath	=	${vaultpath}" />
+	<echo message="fishbowlbuildpath	=	${fishbowlbuildpath}" />
+	<echo message="jenkinsworkspace_WC	=	${jenkinsworkspace_WC}" />
+	<echo message="foldertxtPath	=	${foldertxtPath}" />
+	
+	<!--users and passwords for cad worker -->
+	<echo message="hostnameforCADworker	=	${hostnameforCADworker}" />
+	<echo message="userforcadworkerfromjenkins	=	${userforcadworkerfromjenkins}" />
+	<echo message="pwdforcadworkerfromjenkins	=	*****" />
+	
+	<!--Server urls for the properties file SFTPauth.properties,numbergeneratorIDs.properties-->
+	<echo message="hostnamefornumbergeneratorfromjenkins	=	${hostnamefornumbergeneratorfromjenkins}" />
+	<echo message="providerurl	=	${providerurl}" />
+	<echo message="userldap	=	${userldap}" />
+	<echo message="passwordldap	=	****** " />
+
+	<!-- Newly added for unjar target to run -->
+	<echo message="middlewarewebserviceurl	=	${middlewarewebserviceurl}" />
+	
+	<!---for rsync-->
+	<echo message="remoteserverHostname2	=	${remoteserverHostname2}" />
+	<echo message="remoteserverHostname1	=	${remoteserverHostname1}" />
+	<echo message="usernameforremoteapache	=	${usernameforremoteapache}" />
+	
+	<!--Windchill Path-->
+	<echo message="unjarsrcdir	=	${unjarwindchilldir}/src/ext" />
+	<echo message="unjarsrcdirwtsafearea	=	${unjarwindchilldir}/wtSafeArea/siteMod/src/" />
+	<echo message="unjarsrcdirinterface	=	${unjarwindchilldir}/InterfaceWebServiceSource" />
+	<echo message="unjarsrcdiroracleintegration	=	${unjarwindchilldir}/src/com" />
+
+	<!-- For FishBowl, we take this also from the GIT unzipped folder derived from unjarred windchill folder-->
+	<echo message="unjarfishbowldir	=	${unjarwindchilldir}/../fishbowlonwindchillserver"/>
+	<echo message="fishbowlinstalldir	=	${windchillinstalldir}/../../Fishbowl"/>
+	<echo message="destdir	=	${windchillinstalldir}/codebase" />
+	<echo message="taskdir	=	${windchillinstalldir}/tasks.custo/"/>
+	
+	
+	<!--Echo Messages for Sonar Related Job Information-->
+	<echo message="---------------------------------" />
+	<echo message="Below is the Soanr Job Information"/>
+	<echo message="Sonar_Project_Key = ${Sonar_Project_Key}"/>
+	<echo message="Sonar_Project_URL = ${Sonar_Project_URL}"/>
+	<echo message="jenkinsworkspace	=	${jenkinsworkspace}" />
+	<echo message="jarfiles	=	${jenkinsworkspace}/jarfiles" />
+	<echo message="workspacesrcdir	=	${jenkinsworkspace}/workspace/${JOB_NAME}/Windchill" />
+	<echo message="sonarunjarsrcdir	=	${workspacesrcdir}/src/ext" />
+	<echo message="workspacedirwtsafearea	=	${workspacesrcdir}/wtSafeArea/siteMod/src" />
+	<echo message="workspacedirinterface	=	${workspacesrcdir}/InterfaceWebServiceSource" />
+	<echo message="workspacediroracleintegration	=	${workspacesrcdir}/src/com" />
+	<echo message="workspacedestdir	=	${workspacesrcdir}/codebase" />
+	<echo message="---------------------------------" />
+	
+	<!--Condtion For Java HOME-->
+	<condition property="java" value="${env.JAVA_HOME}/bin/java.exe">
+		<os family="windows" />
+	</condition>
+	<condition property="java" value="${env.JAVA_HOME}/bin/java">
+		<os family="unix" />
+	</condition>
+	 			
+	<!--Class Path Setting for Windchill Build-->
+	<path id="classpath">
+		<fileset dir="${windchillinstalldir}/srclib">
+			<include name="**/*.jar" />
+		</fileset>
+		
+		<fileset dir="${windchillinstalldir}/lib">
+			<include name="**/*.jar" />
+		</fileset>
+		
+		<fileset dir="${windchillinstalldir}/codebase">
+			<include name="**/*.jar" />
+			
+		</fileset>
+		
+		<fileset dir="${windchillinstalldir}/ant/lib">
+			<include name="**/*.jar" />
+		</fileset>
+	
+		
+	</path> 
+	
+	<!--Time Stamp-->
+	<tstamp>
+		<format property="TODAY" pattern="dd-MM-yyyy_HH:mm"  locale="en,US" />
+	</tstamp>
+	
+	<!-- Build Type Selection Target-->	
+	<target name="buildtypefb">
+		<property name="buildtype" value="firstbuild" />
+		<echo message="buildtype = ${buildtype}" />
+	</target>
+	
+	<target name="buildtypeib">
+		<property name="buildtype" value="incrementalbuild" />
+		<echo message="buildtype = ${buildtype}" />
+	</target>
+	
+	
+	<!-- IMP - For Monolithic, please use firstslavebuild_full only.  -->
+	
+	<!--Note for Future developers: There is 1 target in this file which has not been called in this file which has been kept for historical purposes  ( javadoc)-->
+	
+	<!-- RUNNING ADDCOLUMNS TWICE SINCE IT IS USUALLY NOT WORKING ON FIRST ATTEMPT ! -->
+	
+	<!--Build target for OOTB Monolitic Windchill-->
+	<target name="firstslavebuild_full" depends="unjar,buildtypefb,copyFiles,setpermissonforfolderandfiles,resourceBuildNoArgs,xconfpropagate,compile,safeAreaSetup,stopwindchill,clear_cache,makewcjar,startwindchill"/>
+	
+	
+
+	
+	<!--Unzip Build Target-->
+	<target name="unjar">
+		<!-- delete any thing inside unzip folder before you unzip -->
+		<echo message="The content of folder unzipofcurrentbuild will be replaced with changed files next" />
+		
+		
+		
+		<if>
+			<available file="/${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild" type="dir" />
+			<then>
+				<echo message="unzipofcurrentbuild Directory exists" />
+			</then>
+			<else>
+				<echo message="unzipofcurrentbuild Directory does not exist" />
+				<echo message="Creating a new folder build/gitlab/unzipofcurrentbuild" />
+				<mkdir dir="/${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild" />
+			</else>
+		</if>
+		
+		<echo message="Deleting Existing Content...." />
+		<delete includeemptydirs="true">
+			<fileset dir="${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild" includes="**/*"/>
+		</delete>
+		
+		<echo message="Build Filename is ${filename}" />
+		
+		
+		
+		<echo message="Unzipping the ${filename} into /builds/gitlab/unzipofcurrentbuild..." />
+		<unzip src="${windchillinstalldir}/../../builds/gitlab/incrementalbuildjars/${filename}"
+       			dest="/${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild">
+		</unzip>
+		
+		<if>
+			<equals arg1="${osfamily}" arg2="UNIX" />
+			<then>
+				<chmod perm="755">
+				<fileset dir="${windchillinstalldir}/../../builds/gitlab/unzipofcurrentbuild"></fileset>
+				</chmod>
+			</then>
+		</if>
+	</target>	
+	
+	<!-- The copyFiles command start here-->
+	<target name="copyFiles" description="copy files from source to codebase" depends="var.check">
+	
+	<!-- IMP, NOTE THAT PREVIOUS BUILD WAS USING COPYFILES ONLY TO COPY FILES LIKE JSP, ACTIONMODELS, WEB-INF, NETMARKETS INTO THE CODEBASE FOLDER. THESE FILES WERE IN SRC -->
+
+	<!-- for latest build, we have to copy everything EXCEPT these 3 folders, which we handle separately -->
+
+	<!-- copy everything from unjarwindchilldir to the destdir, except for src,InterfaceWebServiceSource folder and Banner_$servername.txt files under the unjarwindchilldir. That we handle in next 4 tags -->
+		<copy todir="${windchillinstalldir}" overwrite="true" failonerror="false" quiet="true">
+				<fileset dir="${unjarwindchilldir}">
+					<exclude name="src"/>
+					<exclude name="**/banner*.txt"/>
+				</fileset>
+		</copy>
+		
+	<!-- For the src folder, we copy selectively as per below since below files need to go to codebase !! (and not to src folder). Note that we do NOT copy the src/com folder below since those files are not for Windchill codebase-->
+	
+		
+		<if>
+		<available file="${unjarwindchilldir}/src/ext" type="dir"/>
+			<then>
+				<!-- Compile the java code from ${unjarwindchilldir}/src/ext into ${destdir}/ext -->
+				<echo message="Copying the java code from ${unjarwindchilldir}/src/ext into ${destdir}/ext" />
+				<copy todir="${destdir}/ext" overwrite="true" failonerror="false" quiet="true">
+					<fileset dir="${unjarwindchilldir}/src/ext">
+						<exclude name="**/*.java"/>
+						<!--exclude name="**/*.rbInfo"/-->
+					</fileset>
+				</copy>
+			</then>
+		</if>	
+	
+		<if>
+			<available file="${unjarwindchilldir}/src/netmarkets" type="dir"/>
+			<then>
+				<!-- Copying the java code from ${unjarwindchilldir}/src/config into ${destdir}/netmarkets -->
+				<echo message="Copying the java code from ${unjarwindchilldir}/src/netmarkets into ${destdir}/netmarkets" />
+				<copy todir="${destdir}/netmarkets" overwrite="true" failonerror="false" quiet="true">
+					<fileset dir="${unjarwindchilldir}/src/netmarkets">
+						<exclude name="**/*.java"/>
+						<!--exclude name="**/*.rbInfo"/-->
+					</fileset>
+				</copy>
+			</then>
+		</if>		
+			
+		<if>
+			<available file="${unjarwindchilldir}/src/WEB-INF" type="dir"/>
+			<then>
+				<!-- Copying the java code from ${unjarwindchilldir}/src/WEB-INF into ${destdir}/WEB-INF -->
+				<echo message="Copying the java code from ${unjarwindchilldir}/src/WEB-INF into ${destdir}/WEB-INF" />
+				<copy todir="${destdir}/WEB-INF" overwrite="true" failonerror="false" quiet="true">
+					<fileset dir="${unjarwindchilldir}/src/WEB-INF">
+						<exclude name="**/*.java"/>
+						<!--exclude name="**/*.rbInfo"/-->
+					</fileset>
+				</copy>
+			</then>
+		</if>
+
+		
+	</target>
+	
+	<!--Set permission for files and folder-->
+	<target name="setpermissonforfolderandfiles">
+			
+		<!-- start FIRSTLY SET THE unix ACCESS CORRECT ELSE FILES WILL NOT GET MODIFIED -->
+		<if> 
+			<not>
+				<equals arg1="${envtype}" arg2="DEVWINDOWS" />
+			</not>
+			<then> <!-- THEREFORE ALL UNIX EVNS BELOW -->
+			<echo message="Changing the Permission of codebase and bin folder" />
+				<chmod perm="755">
+					<fileset dir="${windchillinstalldir}/codebase"> <!-- for all properties and xconfs -->
+						<include name="**/*.properties"/>
+						<include name="**/*.xconf"/>
+					</fileset>
+					
+					<fileset dir="${windchillinstalldir}/bin"> <!-- for validProperties file -->
+						<include name="**/*.list"/>
+					</fileset>
+				</chmod>
+			</then>
+		</if>
+		
+		<!--Changing the Permission of Report Cron Scripts-->
+	
+		
+	</target>
+	
+	<!-- The compile command start here-->
+	<target name="compile" description="compile the source " depends="var.check">
+		
+		<!-- Included available tags to check if the dir is available--> 
+		<if>
+			<available file="${unjarsrcdiroracleintegration}" type="dir"/>
+			<then>
+				<!-- Compile the java code from ${unjarsrcdiroracleintegration} into ${destdir} -->
+				<echo message="Compile the java code from ${unjarsrcdiroracleintegration} into ${destdir}" />
+				<javac srcdir="${unjarsrcdiroracleintegration}" destdir="${windchillinstalldir}/codebase">
+					<classpath refid="classpath" />
+				</javac>
+			</then>
+		</if>
+		
+		<!-- Included available tags to check if the dir is available-->
+		<if>
+			<available file="${unjarsrcdir}" type="dir"/>
+			<then>
+				<!-- Compile the java code from ${unjarsrcdir} into ${destdir} -->
+				<echo message="Compile the java code from ${unjarsrcdir} into ${destdir}" />
+				<javac srcdir="${unjarsrcdir}" destdir="${destdir}" debug="true"  debuglevel="lines,vars,source">
+						<classpath refid="classpath" />
+				</javac>
+			</then>
+		</if>
+
+		<!-- Included available tags to check if the dir is available-->
+		<if>
+			<available file="${unjarsrcdirwtsafearea}" type="dir"/>
+			<then>
+				<!-- Compile the java code from ${unjarsrcdirwtsafearea} into ${destdir} -->
+				<echo message="Compile the java code from ${unjarsrcdirwtsafearea} into ${destdir}" />
+				<javac srcdir="${unjarsrcdirwtsafearea}" destdir="${windchillinstalldir}/codebase">
+					<classpath refid="classpath" />
+				</javac>
+			</then>
+		</if>
+		
+		<!-- Included available tags to check if the dir is available-->
+		<echo message="Code compilation task completed. Please check the logs above for any errors" />
+	</target>
+	<!-- The compile command end here-->
+	
+	<!-- The clear_cache command start here-->
+	<target name="clear_cache" description="Clears Windchill Cache" >
+	<!-- Clear cache-->	
+		<echo message="---------------------------------"/>
+		<echo message="Clearing tomcat instances and compiled tasks"/>
+		<echo message="---------------------------------"/>
+		<delete dir="${windchillinstalldir}/tomcat/instances"/>
+		<delete dir="${windchillinstalldir}/tasks/codebase/com/infoengine/compiledTasks"/>  
+	</target>
+	
+	<!-- The stopwindchill command start here-->
+	<target name="stopwindchill">
+
+		<!-- FAILORNERROR IS false since if WC is already stopped it will fail, thats fine
+			timeout is 100 seconds or 10000 milliseconds since some nodes (like 07) on staging is taking too much time
+		-->
+
+		<echo message="---------------------------------"/>
+		<echo message="Stopping Windchill. If it fails to stop, it means WC is already stopped and hence we will ignore the error and proceed to next step. We wait for 100 seconds for this task to complete"/>
+		<echo message="---------------------------------"/>
+		<if>
+			<equals arg1="${envtype}" arg2="DEVWINDOWS" />
+			<then>
+				<exec executable="${windchillinstalldir}/bin/windchill" failonerror="false" timeout="10000">
+					<arg value="stop"/>
+				</exec>	
+			</then>
+			<else>
+				<exec executable="${windchillinstalldir}/bin/windchill" failonerror="false" timeout="10000">
+					<arg value="stop"/>
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+			</else>
+		</if>
+		<!-- WAIT FOR MS TO REALLY STOP BY BELOW TAG -->
+		<sleep seconds="100"/>
+	</target>
+	
+	<!-- duplicate target OF ABOVE below since ANT does not call same target twice, hence giving it a diff. name-->
+	<target name="stopwindchill_last">
+		<antcall target="stopwindchill"/>
+	</target>
+	
+	<!-- The startwindchill command start here-->
+	<target name="startwindchill">
+	
+		<echo message="---------------------------------"/>
+		<echo message="Starting Windchill. If it fails to start, it means WC is already started and hence we will ignore the error and proceed to next step. We wait for 300 seconds for this task to complete"/>
+		<echo message="---------------------------------"/>
+		<if>
+			<equals arg1="${envtype}" arg2="DEVWINDOWS" />
+			<then>
+				<exec executable="${windchillinstalldir}/bin/windchill" failonerror="false" timeout="20000">
+					<arg value="start"/>
+					<env key="JENKINS_NODE_COOKIE" value="dontKillMe"/>
+				</exec>	
+			</then>
+			<else>
+				<exec executable="${windchillinstalldir}/bin/windchill" failonerror="false" timeout="20000">
+					<arg value="start"/>
+					<env key="PATH" value="${env.PATH}"/>
+					<env key="JENKINS_NODE_COOKIE" value="dontKillMe"/>
+				</exec>	
+			</else>
+		</if>
+		<sleep seconds="300"/>
+	</target>
+	
+	
+	
+	<!-- The xconfCommand command start Condition-->
+	<condition property="xconfCommand" value="${windchillinstalldir}/bin/xconfmanager.bat">
+		<os family="windows" />
+	</condition>
+	<condition property="xconfCommand" value="${windchillinstalldir}/bin/xconfmanager">
+		<os family="unix" />
+	</condition>
+	
+	<!-- The xconfpropogate command start target-->
+	<target name="xconfpropagate" depends="xconfAddEntry">
+		<exec executable="${xconfCommand}" failonerror="true">
+			<arg value="-p" />
+		</exec>
+	</target>
+	
+	<!-- The xconfworkflowrelated target-->
+	<target name="xconfworkflowrelated">
+		<!--
+		xconfmanager -undefine wt.clients.workflow.tasks.task.5
+		xconfmanager -s wt.clients.workflow.tasks.task.4=observe  wt.properties
+		-->
+		<!-- below is like commenting the key -->
+		<exec executable="${xconfCommand}" failonerror="true">
+			<arg value="--undefine" />
+			<arg value="wt.clients.workflow.tasks.task.5" />
+		</exec>
+		<!-- below is to change the value of a key -->
+		<exec executable="${xconfCommand}" failonerror="true">
+			<arg value="-s" />
+			<arg value="wt.clients.workflow.tasks.task.4=observe" />
+			<arg value="-t" />
+			<arg value="${windchillinstalldir}/codebase/wt.properties" />
+
+			<arg value="-p" />
+		</exec>
+	</target> 
+	
+	<!-- below is a safe target. Calling mutliple times has no harm-->
+	<!-- The xconfAddEntry  target-->
+	<target name="xconfAddEntry">
+		<if>
+			<available file="${unjarwindchilldir}/xconf.custo/" type="dir"/>
+				<then>
+				<echo message="xconf Files are updated or new xocnf is added..." />
+				<!-- WE COMMETED SINCE OOTB CANNOT DEAL WITH SAME KEYS IN DIFFERENT XCONFS. IT CAUSES ISSUES IN PROPAGATION
+				WE NOW HAVE STORED THE PLAIN PROPERTIES INSTEAD WITH THE LAST KEY BEING WHAT WE WILL REPLACE AT RUN TIME
+				exec executable="${xconfCommand}" failonerror="true">
+				<arg value="-i" />
+				<arg value="xconf.custo/numbergeneratorIDs.xconf" />
+				</exec  -->
+
+				<exec executable="${xconfCommand}" failonerror="true">
+					<arg value="-i" />	
+					<arg value="xconf.custo/xyz.xconf" />
+				</exec>
+				
+				<exec executable="${xconfCommand}" failonerror="true">
+					<arg value="-i" />	
+					<arg value="xconf.custo/xyz1.xconf" />
+				</exec>
+				
+				<!-- the serverconnections_${envtype}.xconf we are creating will have to be called here. That proper environment specific file WILL be selected based on envtype value -->
+			</then>
+			
+			<else>
+				<echo message="No new xconf's to add." />
+			</else>
+		</if>
+	</target>
+
+	<!-- The Add Columns command Condition -->
+	<condition property="addColumsCommand" value="${windchillinstalldir}/bin/AddColumns.bat">
+		<os family="windows" />
+	</condition>
+	<condition property="addColumsCommand" value="${windchillinstalldir}/bin/AddColumns.sh">
+		<os family="unix" />
+	</condition>
+	
+	<!-- The Add Columns command target -->
+	<target name="addColumns" depends="adColumVar.Check">
+		<exec executable="${addColumsCommand}" failonerror="true">
+			<arg value="wcobject" />
+			<arg value="atrColums" />
+		</exec>
+	</target>
+	
+	<!-- The Add Columns NoArgs target  -->
+	<target name="addColumnsNoArgs">
+   		<echo message="ADDCOLUMNS START. NOTE THAT THIS WILL TAKE 15 MINS TO 30 MINS TO RUN !! " />
+		<if>
+			<equals arg1="${envtype}" arg2="DEVWINDOWS" />
+			<then>
+					<!-- For WTPART -->
+				<echo message="ADDING Columns for WTPart TYPE : String "/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="String=4" />
+					
+				</exec>
+				
+				<echo message="ADDING Columns for WTPart TYPE : Boolean "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="Boolean=2" />
+					
+				</exec>
+				
+				<!-- For WTDocument  -->
+				<echo message="ADDING Columns for WTDocument TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.doc.WTDocument" />
+					<arg value="String=2" />
+					
+				</exec>
+
+				<!-- For Manufacturer -->
+				<echo message="ADDING Columns for Manufacturer TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.suma.supplier.Manufacturer" />
+					<arg value="String=1" />
+					
+				</exec>
+
+				<!-- For Optioon -->
+				<echo message="ADDING Columns for Option TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Option" />
+					<arg value="String=1" />
+					
+				</exec>
+
+				<!-- For Choice  -->
+				<echo message="ADDING Columns for Choice TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Choice" />
+					<arg value="String=1" />
+					
+				</exec>
+				
+				<!-- For WTChangeRequest2  -->
+				<echo message="ADDING Columns for WTChangeRequest2 TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeRequest2" />
+					<arg value="String=1" />
+					
+				</exec>
+				
+				<!-- For WTChangeOrder2  -->
+				<echo message="ADDING Columns for WTChangeOrder2 TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeOrder2" />
+					<arg value="String=1" />
+					
+				</exec>
+
+				
+				<!-- For String Length Update for 4000 characters, change is done in serverconnections.xconf and below 1 line-->
+				<!-- For WTPART -->
+				<echo message="String Length Update for 4000 characters for WTPart"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				<!-- For WTDocument  -->
+				<echo message="String Length Update for 4000 characters for WTDocument"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.doc.WTDocument" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				
+				<!-- For Manufacturer  -->
+				<echo message="String Length Update for 4000 characters for Manufacturer"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.suma.supplier.Manufacturer" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				
+				<!-- For Optioon -->
+				<echo message="String Length Update for 4000 characters for Option"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Option" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				
+				<!-- For Choice  -->
+				<echo message="String Length Update for 4000 characters for Choice"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Choice" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				
+				<!-- For WTChangeRequest2  -->
+				<echo message="String Length Update for 4000 characters for WTChangeRequest2"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeRequest2" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+				
+
+				<!-- For WTChangeOrder2  -->
+				<echo message="String Length Update for 4000 characters for WTChangeOrder2"/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeOrder2" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					
+				</exec>
+
+
+			</then>
+		<else>
+				<!-- For WTPART -->
+				<echo message="ADDING Columns for WTPart TYPE : String "/>	
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="String=4" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<echo message="ADDING Columns for WTPart TYPE : Boolean "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="Boolean=2" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTDocument  -->
+				<echo message="ADDING Columns for WTDocument TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.doc.WTDocument" />
+					<arg value="String=2" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+
+				<!-- For Manufacturer -->
+				<echo message="ADDING Columns for Manufacturer TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.suma.supplier.Manufacturer" />
+					<arg value="String=1" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+
+				<!-- For Optioon -->
+				<echo message="ADDING Columns for Option TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Option" />
+					<arg value="String=1" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+
+				<!-- For Choice  -->
+				<echo message="ADDING Columns for Choice TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Choice" />
+					<arg value="String=1" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTChangeRequest2  -->
+				<echo message="ADDING Columns for WTChangeRequest2 TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeRequest2" />
+					<arg value="String=1" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTChangeOrder2  -->
+				<echo message="ADDING Columns for WTChangeOrder2 TYPE : String "/>
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeOrder2" />
+					<arg value="String=1" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+
+				
+				<!-- For String Length Update for 4000 characters, change is done in serverconnections.xconf and below 1 line-->
+				<!-- For WTPART -->
+				<echo message="String Length Update for 4000 characters for WTPart"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.part.WTPart" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTDocument  -->
+				<echo message="String Length Update for 4000 characters for WTDocument"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.doc.WTDocument" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For Manufacturer  -->
+				<echo message="String Length Update for 4000 characters for Manufacturer"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.suma.supplier.Manufacturer" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For Optioon -->
+				<echo message="String Length Update for 4000 characters for Option"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Option" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For Choice  -->
+				<echo message="String Length Update for 4000 characters for Choice"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="com.ptc.windchill.option.model.Choice" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTChangeRequest2  -->
+				<echo message="String Length Update for 4000 characters for WTChangeRequest2"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeRequest2" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+				
+				<!-- For WTChangeOrder2  -->
+				<echo message="String Length Update for 4000 characters for WTChangeOrder2"/>					
+				<exec executable="${addColumsCommand}" failonerror="true">
+					<arg value="wt.change2.WTChangeOrder2" />
+					<arg value="String=1" />
+					<arg value="-stringSize" />
+					<env key="PATH" value="${env.PATH}"/>
+				</exec>
+
+			</else>
+		</if>
+		
+	</target>
+
+	<!-- The Resource Build command Condition -->
+	<condition property="resourceBuildCommand" value="${windchillinstalldir}/bin/ResourceBuild.bat">
+		<os family="windows" />
+	</condition>
+	<condition property="resourceBuildCommand" value="${windchillinstalldir}/bin/ResourceBuild.sh">
+		<os family="unix" />
+	</condition>
+	
+	<!-- The Resource Build command  -->
+	<target name="resourceBuildNoArgs" depends="collectrbinfosfordeletingtheirserfiles">
+	
+	<!--IMPORTANT - NOTE THAT WE ARE PASSING THE WT HOME VARIABLE AS AN ARGUMENT BELOW USING ENV TAG TO TAKE CARE OF RB NOT WORKING PROPERLY ON CERTAIN MACHINES -->
+	
+		<!-- For wt.change2.* -->
+		<echo message="	resourceBuildNoArgs : For wt.change2.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.change2.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For wt.lifecycle.* -->
+		<echo message="	resourceBuildNoArgs : For wt.lifecycle.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">	
+			<arg value="wt.lifecycle.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For wt.project.* -->
+		<echo message="	resourceBuildNoArgs : For wt.project.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.project.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For wt.access.* -->
+		<echo message="	resourceBuildNoArgs : For wt.access.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.access.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For wt.part.* -->
+		<echo message="	resourceBuildNoArgs : For wt.part.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.part.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For wt.access.configuration.* -->
+		<echo message="	resourceBuildNoArgs : For  wt.access.configuration.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.access.configuration.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+
+		<!-- For com.ptc.windchill.suma.axl.AXLPreferenceRB -->
+		<echo message="	resourceBuildNoArgs : For com.ptc.windchill.suma.axl.AXLPreferenceRB "/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="com.ptc.windchill.suma.axl.AXLPreferenceRB" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+		
+		<!-- For wt.util.resource.resourceCustomize -->
+		<echo message="	resourceBuildNoArgs : For wt.util.resource.resourceCustomize"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.util.resource.resourceCustomize" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+		
+		<!-- For ContentCategoryRB -->
+		<echo message="	resourceBuildNoArgs : For ContentCategoryRB"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="com.ptc.windchill.cadx.editattachments.ContentCategoryRB" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>
+		</exec>
+		
+		<!-- For wt.org.* -->
+		<echo message="	resourceBuildNoArgs :  For wt.org.*"/>	
+		<exec executable="${resourceBuildCommand}" failonerror="true">
+			<arg value="wt.org.*" />
+			<env key="WT_HOME" value="${windchillinstalldir}"/>		
+		</exec>	
+	</target>
+
+	<!--taeget to delete by .ser of all rbinfo files-->
+	<target name="collectrbinfosfordeletingtheirserfiles">
+		<echo message="inside target collectrbinfosfordeletingtheirserfiles"/>
+			<if>
+				<available file="${unjarwindchilldir}" type="dir"/>
+				<then>
+					<foreach target="deletetheserfiles" param="theSrcRbinfoFile">
+						 <path>
+							  <fileset dir="${unjarwindchilldir}" casesensitive="yes">
+									<include name="**/*.rbInfo"/>
+							  </fileset>
+						</path>
+					</foreach>
+				 </then>
+				<else>
+					<echo message="Build do not have any file to deploy or ${unjarwindchilldir} does not exist...."/>
+				</else>
+			</if>
+	</target>
+	
+	<!--Delete .ser files command-->
+	 <target name="deletetheserfiles" >
+	
+		<echo>The source RBInfo File is ${theSrcRbinfoFile}</echo>
+		<basename property="basefilename" file="${theSrcRbinfoFile}" suffix=".rbInfo"/>
+		
+		<echo>The base  Filename  is ${basefilename}</echo>
+		<propertyregex override="yes" property="theSrcRbinfoFile" input="${theSrcRbinfoFile}"
+		regexp="\.rbInfo" replace=".RB.ser" global="true" />
+		
+		<propertyregex override="yes" property="theSrcRbinfoFile" input="${theSrcRbinfoFile}"
+		regexp="${unjarwindchilldir}/wtCustom/" replace="${windchillinstalldir}/codebase/" global="true" />
+		
+		<echo message="The Target file name for deletion is ${theSrcRbinfoFile}"/> 
+		<dirname property="dirname" file="${theSrcRbinfoFile}"/>
+		<echo>The source  dirname  is ${dirname}</echo>
+					
+		<!-- BELOW WILL DELETE ALL VARIANTS OF LANGUAGES OF .SER FILES, LIKE en_gb, en_US etc.. -->
+		<delete>
+			<fileset dir="${dirname}" defaultexcludes="false">
+				<include name="${basefilename}***.RB.ser" />
+			</fileset>
+		</delete>
+	 </target>
+	 
+	<!-- The O/S dependent ant command  -->
+	<condition property="antcmd" value="ant.bat">
+		<os family="windows" />
+	</condition>
+
+	<condition property="antcmd" value="ant" >
+	<os family="unix"/>
+        </condition>
+			
+	<!-- Make Jar command  -->
+    <target name="makewcjar">
+            <exec executable="${windchillinstalldir}/ant/bin/${antcmd}" failonerror="true">
+			<arg value="-f" />
+			<arg value="${windchillinstalldir}/codebase/MakeJar.xml" />
+			</exec>
+    </target>
+	
+	<!-- SafeAreaSetup command  -->
+	<target name="safeAreaSetup">
+		<if>
+			<available file="${unjarwindchilldir}/wtSafeArea/" type="dir" />
+			<then>
+				<if>
+					<available file="${unjarwindchilldir}/wtSafeArea/siteMod" type="dir" />
+					<then>
+					<echo message="Running safeAreaSetup"/>
+							<exec executable="${windchillinstalldir}/ant/bin/${antcmd}" failonerror="true">
+							<arg value="-f" />
+							<arg value="${windchillinstalldir}/bin/swmaint.xml" />
+							<arg value="installSiteChanges" />
+						</exec>	
+					</then>
+				</if>
+				
+				<if> 
+					<available file="${unjarwindchilldir}/wtSafeArea/siteMod/codebase/netmarkets/javascript/util/jsfrags/custom.jsfrag" type="file" />
+					<then>
+						<echo message="IMPORTANT ! - Running OOTB Windchill ANT script to combine js fragments. This will generate >1000 lines of log text!" />
+						<!-- below is for the custom js to combine to ootb js -->
+						<exec executable="${windchillinstalldir}/ant/bin/${antcmd}">
+							<arg value="-f" />
+							<arg value="${windchillinstalldir}/bin/jsfrag_combine.xml" />
+						</exec>					
+					</then>
+				</if>
+			</then>
+			<else>
+				<echo message="No Update found in SafeAreaSetup files...."/>
+			</else>
+		</if>
+	</target>
+
+	<!-- LoadFiles command . BELOW WILL NOT WORK SINCE ITS NEEDS A CUSTOM ANT SCRIPT WITH CUSTOM TAG AND JAVA FILES DEPLOYED IN THIS REPO  -->
+	<target name="loadFiles">
+		<if>
+			<available file="${unjarwindchilldir}/loadFiles" type="dir" />
+			<then>
+				<exec executable="${windchillinstalldir}/ant/bin/${antcmd}" failonerror="true">
+					<arg value="-f" />
+					<arg value="${windchillinstalldir}/loadFiles/ext/loadfiles_MASTER_ANT.xml" />
+					<arg value="loadFiles" />
+					<arg value="-Dunjarwindchilldir=${unjarwindchilldir}" />
+					<arg value="-Dwindchillinstalldir=${windchillinstalldir}" /> 
+					<arg value="-Duser=${adminuserid}" />
+					<arg value="-Dpassword=${adminpassword}"  />
+					<arg value="-Denvtype=${envtype}"  />
+					<arg value="-Dbuildtype=${buildtype}"  />
+				</exec>
+			</then>
+			<else>
+				<echo message="No Update found in LoadFiles files...."/>
+			</else>
+		</if>
+		
+	</target>
+
+	<!-- Variable Check windchill path command  -->
+	<target name="var.check">
+		
+		<fail message="Please Provide the Windchill install Directory.
+			  -Dwindchillinstalldir=/opt/ptc/Windchill_11/Windchill">
+			<condition>
+				<or>
+					<equals arg1="${windchillinstalldir}" arg2="" />
+					<not>
+						<isset property="windchillinstalldir" />
+					</not>
+				</or>
+			</condition>
+		</fail>
+		
+	</target>
+
+	<!-- Variable Check For addColumnVariable command  -->	
+	<target name="adColumVar.Check">
+	
+		<fail message="Please Provide the Object Type. Example: -Dwcobject=wt.part.WTPart">
+			<condition>
+				<or>
+					<equals arg1="${wcobject}" arg2="" />
+					<not>
+						<isset property="wcobject" />
+					</not>
+				</or>
+			</condition>
+		</fail>
+
+		<fail message="Object Value should be (${wcobject}) one of object wt.part.WTPart or wt.doc.WTDocument or com.ptc.windchill.suma.supplier.Manufacturer or wt.change2.WTChangeRequest2 or  wt.change2.WTChangeOrder2 or com.ptc.windchill.option.model.Option or com.ptc.windchill.option.model.Choice">
+			<condition>
+				<or>
+					<matches pattern="![wt.part.WTPart]" string="${object}" />
+					<matches pattern="![wt.doc.WTDocument]" string="${object}" />
+					<matches pattern="![com.ptc.windchill.suma.supplier.Manufacturer]" string="${object}" />
+					<matches pattern="![com.ptc.windchill.option.model.Option]" string="${object}" />
+					<matches pattern="![com.ptc.windchill.option.model.Choice]" string="${object}" />
+					<matches pattern="![wt.change2.WTChangeRequest2]" string="${object}" />
+					<matches pattern="![wt.change2.WTChangeOrder2]" string="${object}" />
+				</or>
+			</condition>
+		</fail>
+
+		<fail message="Please Provide the Standard Attribute Type and Number of Colums.Example: -DatrColums=&quot;String=6&quot;">
+			<condition>
+				<or>
+					<equals arg1="${atrColums}" arg2="" />
+					<not>
+						<isset property="atrColums" />
+					</not>
+				</or>
+			</condition>
+		</fail>
+
+		<fail message="Standard Attribute Type and Number of Colums ahould be one of object String= or Boolean= ">
+			<condition>
+				<or>
+					<matches pattern="![String=*]" string="${atrColums}" />
+					<matches pattern="![Boolean=*]" string="${atrColums}" />
+				</or>
+			</condition>
+		</fail>
+	</target>
+
+	
+	 <!--rsyncremoteserverapache command-->
+	
+		
+	<!--To Check the Method server is up or not.-->
+	<property name="methodserver" value="MethodServerMain"/>
+	<target name ="startwindchillifdown">
+		<delete file="${windchillinstalldir}/jps.txt"/>
+			<exec command="jps" failonerror="false">
+				<redirector output="jps.txt" alwayslog="true"/> 
+			</exec>
+	<if>
+		<resourcecontains resource="${windchillinstalldir}/jps.txt" substring="${methodserver}" />
+		<then>
+			<echo message="the MethodServer is UP and Running Successfully "/>
+		</then>
+		<else>
+			<echo message="Starting the Method Server please wait "/>
+			<antcall target="startwindchill" />
+			</else>
+		</if>		
+	</target>
+	
+</project>
